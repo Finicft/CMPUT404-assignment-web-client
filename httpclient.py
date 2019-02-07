@@ -22,7 +22,7 @@ import sys
 import socket
 import re
 # you may use urllib to encode data appropriately
-import urllib.parse
+from urllib.parse import urlparse
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -33,7 +33,13 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
+    def get_host_port_path(self,url):
+        #code from https://pymotw.com/3/urllib.parse/
+        componments = urlparse(url)
+        host = componments.hostname
+        port = componments.port
+        path = componments.path 
+        return host,port,path
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,13 +47,20 @@ class HTTPClient(object):
         return None
 
     def get_code(self, data):
-        return None
+        headers = self.get_headers(data)
+        print(headers)
+        print(headers.split(" "))
+        code = int(headers.split(" ")[1])
+        return code
 
     def get_headers(self,data):
-        return None
+        headers = data.split("\r\n\r\n")[0]
+        headers.split("\r\n")
+        return headers
 
     def get_body(self, data):
-        return None
+        body = data.split("\r\n\r\n")[1]
+        return body
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -56,11 +69,11 @@ class HTTPClient(object):
         self.socket.close()
 
     # read everything from the socket
-    def recvall(self, sock):
+    def recvall(self):
         buffer = bytearray()
         done = False
         while not done:
-            part = sock.recv(1024)
+            part = self.socket.recv(1024)
             if (part):
                 buffer.extend(part)
             else:
@@ -70,11 +83,43 @@ class HTTPClient(object):
     def GET(self, url, args=None):
         code = 500
         body = ""
+        HOST, PORT, PATH = self.get_host_port_path(url)
+        self.connect(HOST, PORT)
+        payload = "GET {} HTTP/1.1\r\nHost: {}\r\n\r\n".format(PATH, HOST)
+        self.sendall(payload)
+        data = self.recvall()
+        print("data_________")
+        print(data)
+        print("data_________")
+        code = self.get_code(data)
+        print("____________________")
+        
+        body = self.get_body(data)
+        print("____________________")
+        
+        
+
+
+        
+        self.close()
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         code = 500
         body = ""
+        HOST, PORT, PATH = self.get_host_port_path(url)
+        self.connect(HOST, PORT)
+        payload = "POST {} HTTP/1.1\r\nHost: {}\r\n\r\n".format(PATH, HOST)
+        self.sendall(payload)
+        data = self.recvall()
+        print(payload)
+        print(data)
+        code = self.get_code(data)
+        body = self.get_body(data)
+
+
+        
+        self.close()
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
