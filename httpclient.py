@@ -22,7 +22,7 @@ import sys
 import socket
 import re
 # you may use urllib to encode data appropriately
-from urllib.parse import urlparse
+import urllib
 
 def help():
     print("httpclient.py [GET/POST] [URL]\n")
@@ -35,10 +35,18 @@ class HTTPResponse(object):
 class HTTPClient(object):
     def get_host_port_path(self,url):
         #code from https://pymotw.com/3/urllib.parse/
-        componments = urlparse(url)
+        componments = urllib.parse.urlparse(url)
         host = componments.hostname
         port = componments.port
         path = componments.path 
+        scheme = componments.scheme
+        if port == None:
+            if scheme == "http":
+                port = 80 
+            else: 
+                port = 443 
+        if path == "":
+            path = "/"
         return host,port,path
 
     def connect(self, host, port):
@@ -48,8 +56,6 @@ class HTTPClient(object):
 
     def get_code(self, data):
         headers = self.get_headers(data)
-        print(headers)
-        print(headers.split(" "))
         code = int(headers.split(" ")[1])
         return code
 
@@ -81,46 +87,43 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
+        #connect socket
         HOST, PORT, PATH = self.get_host_port_path(url)
         self.connect(HOST, PORT)
-        payload = "GET {} HTTP/1.1\r\nHost: {}\r\n\r\n".format(PATH, HOST)
+        #send request and receive response 
+        payload = "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: Close\r\n\r\n".format(PATH, HOST)
         self.sendall(payload)
         data = self.recvall()
-        print("data_________")
-        print(data)
-        print("data_________")
+        #get code and body 
         code = self.get_code(data)
-        print("____________________")
-        
         body = self.get_body(data)
-        print("____________________")
-        
-        
-
-
-        
+         #close connection
         self.close()
+        print(body)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
-        HOST, PORT, PATH = self.get_host_port_path(url)
-        self.connect(HOST, PORT)
-        payload = "POST {} HTTP/1.1\r\nHost: {}\r\n\r\n".format(PATH, HOST)
-        self.sendall(payload)
-        data = self.recvall()
-        print(payload)
-        print(data)
-        code = self.get_code(data)
-        body = self.get_body(data)
-
-
+         HOST, PORT, PATH = self.get_host_port_path(url)
+         self.connect(HOST, PORT)
+         content_type = "Content-Type: application/x-www-form-urlencoded"
+         content_length = "Content-Length: "
         
-        self.close()
-        return HTTPResponse(code, body)
+         if args == None:
+             content_length += str(0) 
+         else:
+             #encode args
+             #code from https://stackoverflow.com/questions/5607551/how-to-urlencode-a-querystring-in-python
+             encoded = urllib.parse.urlencode(args)
+             content_length += str(len(encoded)) + "\r\n\r\n" + encoded
+         close_connection = "Connection: Close"
+         payload = "POST {} HTTP/1.1\r\nHost: {}\r\n{}\r\n{}\r\n{}\r\n\r\n".format(PATH, HOST, content_type, content_length, close_connection)
+         self.sendall(payload)
+         data = self.recvall()
+         code = self.get_code(data)
+         body = self.get_body(data)
+         self.close()
+         print(body)
+         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
         if (command == "POST"):
